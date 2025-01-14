@@ -116,6 +116,12 @@ class Comment(models.Model):
         auto_now_add=True,
         verbose_name='Добавлено'
     )
+    post = models.ForeignKey(
+        'Post',
+        on_delete=models.CASCADE,
+        verbose_name='Пост',
+        related_name='comments'
+    )
 
     class Meta:
         verbose_name = 'комментарий'
