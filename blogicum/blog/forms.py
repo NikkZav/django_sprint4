@@ -10,7 +10,7 @@ class UserEditForm(forms.ModelForm):
         fields = ('first_name', 'last_name', 'last_login', 'email')
 
 
-class CommentCreateForm(forms.ModelForm):
+class CommentForm(forms.ModelForm):
     class Meta:
         model = Comment
         fields = ('text',)
