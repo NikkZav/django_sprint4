@@ -20,20 +20,20 @@ urlpatterns = [
          name='create_post'),
 
     path('posts/<int:post_id>/edit/',  # wait work...
-         CreateView.as_view(),
+         views.PostUpdateView.as_view(),
          name='edit_post'),
 
     path('posts/<int:post_id>/delete/',  # wait work...
-         CreateView.as_view(),
+         views.PostDeleteView.as_view(),
          name='delete_post'),
 
-    path('posts/<int:post_id>/comment/',  # in work...
+    path('posts/<int:post_id>/comment/',
          views.PostView.as_view(),
          name='add_comment'),
-    path('posts/<int:post_id>/edit_comment/<int:comment_id>/',  # wait work...
-         views.CommentEditView.as_view(),
+    path('posts/<int:post_id>/edit_comment/<int:comment_id>/',
+         views.CommentUpdateView.as_view(),
          name='edit_comment'),
-    path('posts/<int:post_id>/delete_comment/<int:comment_id>/',  # wait work...
+    path('posts/<int:post_id>/delete_comment/<int:comment_id>/',
          views.CommentDeleteView.as_view(),
          name='delete_comment'),
 

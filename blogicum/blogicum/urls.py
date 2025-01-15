@@ -32,7 +32,7 @@ urlpatterns = [
     # Логин.
     path('login/', MyLoginView.as_view(), name='login'),
     # Логаут.
-    path('logout/', views.LogoutView.as_view(), name='logout'), 
+    path('logout/', views.LogoutView.as_view(), name='logout'),
 
     # Изменение пароля.
     path('password_change/', views.PasswordChangeView.as_view(), name='password_change'),

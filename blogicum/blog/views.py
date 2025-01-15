@@ -8,28 +8,25 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from .forms import UserEditForm, CommentForm, PostForm
 
 
-class PostListView(generic.ListView):
+class PostMixin:
     model = Post
-    # выполняет запрос queryset = Post.objects.all(),
-    # но мы его переопределим:
+    pk_url_kwarg = 'post_id'
+    ordering = '-pub_date'
+    paginate_by = 10
+
+
+class PostListView(PostMixin, generic.ListView):
+    template_name = 'blog/index.html'
     queryset = Post.objects.filter(
         pub_date__date__lt=timezone.now(),
         is_published=True,
         category__is_published=True
     ).select_related('author', 'location', 'category'
                      ).prefetch_related('comments')
-    # ...сортировку, которая будет применена при выводе списка объектов:
-    ordering = '-pub_date'
-    # ...и даже настройки пагинации:
-    paginate_by = 10
-    template_name = 'blog/index.html'
 
 
 class CategoryPostsListView(generic.ListView):
-    model = Post
-    ordering = '-pub_date'
     template_name = 'blog/category.html'
-    paginate_by = 10
 
     def get_queryset(self):
         # Получаем slug категории из URL
@@ -56,19 +53,9 @@ class CategoryPostsListView(generic.ListView):
         return context
 
 
-class PostDetailView(generic.DetailView):
-    model = Post
+class PostDetailView(PostMixin, generic.DetailView):
     template_name = 'blog/detail.html'
     context_object_name = 'post'
-    pk_url_kwarg = 'post_id'
-
-    def get_queryset(self):
-        # Ограничиваем выборку только опубликованными постами
-        return Post.objects.filter(
-            is_published=True,
-            category__is_published=True,
-            pub_date__lte=timezone.now()
-        )
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -78,8 +65,7 @@ class PostDetailView(generic.DetailView):
         return context
 
 
-class PostCreateView(generic.CreateView, LoginRequiredMixin):
-    model = Post
+class PostCreateView(LoginRequiredMixin, PostMixin, generic.CreateView):
     form_class = PostForm
     template_name = 'blog/create.html'
 
@@ -93,23 +79,49 @@ class PostCreateView(generic.CreateView, LoginRequiredMixin):
                             kwargs={'username': self.request.user.username})
 
 
-class CommentCreateView(generic.FormView, LoginRequiredMixin):
-    # model = Post
-    template_name = 'blog/detail.html'
+class PostUpdateView(LoginRequiredMixin,
+                     PostCreateView, generic.edit.UpdateView):
+
+    def get_success_url(self):
+        return reverse('blog:post_detail',
+                       kwargs={'post_id': self.kwargs['post_id']})
+
+
+class PostDeleteView(LoginRequiredMixin, PostCreateView, generic.DeleteView):
+    pass
+
+
+class CommentMixin:
+    model = Comment
     form_class = CommentForm
+    pk_url_kwarg = 'comment_id'
+    template_name = 'blog/comment.html'
+
+    def get_post(self):
+        """Получение поста по переданному ID."""
+        return get_object_or_404(Post, pk=self.kwargs['post_id'])
 
     def form_valid(self, form):
-        # Добавление логики для сохранения комментария
-        comment = form.save(commit=False)
-        comment.post = Post.objects.get(pk=self.kwargs['post_id'])
-        comment.author = self.request.user
-        comment.save()
+        """Общая логика обработки формы."""
+        form.instance.post = self.get_post()
+        form.instance.author = self.request.user
         return super().form_valid(form)
 
     def get_success_url(self):
-        # Получение поста из переданных параметров
-        post_id = self.kwargs['post_id']
-        return reverse('blog:post_detail', kwargs={'post_id': post_id}) + '#comments'
+        """Общая логика для перенаправления после успешной операции."""
+        return reverse('blog:post_detail', kwargs={'post_id': self.kwargs['post_id']}) + '#comments'
+
+
+class CommentCreateView(LoginRequiredMixin, CommentMixin, generic.CreateView):
+    """Создание комментария."""
+
+
+class CommentUpdateView(LoginRequiredMixin, CommentMixin, generic.UpdateView):
+    """Редактирование комментария."""
+
+
+class CommentDeleteView(LoginRequiredMixin, CommentMixin, generic.DeleteView):
+    """Удаление комментария."""
 
 
 class PostView(generic.View):
@@ -121,44 +133,6 @@ class PostView(generic.View):
     def post(self, request, *args, **kwargs):
         view = CommentCreateView.as_view()
         return view(request, *args, **kwargs)
-
-
-class CommentEditView(generic.DetailView,
-                      generic.FormView,
-                      LoginRequiredMixin):
-    model = Comment
-    template_name = 'blog/comment.html'
-    form_class = CommentForm
-    pk_url_kwarg = 'comment_id'
-
-    def get_initial(self):
-        # Получаем объект и заполняем начальные данные формы
-        return {'text': self.get_object().text}
-
-    def form_valid(self, form):
-        # Получаем объект комментария
-        comment = self.get_object()
-        # Обновляем только нужные поля
-        comment.text = form.cleaned_data['text']  # Пример обновления поля
-        # Сохраняем только обновлённое поле
-        comment.save(update_fields=['text'])
-        return super().form_valid(form)
-
-    def get_success_url(self):
-        # Получение поста из переданных параметров
-        post_id = self.kwargs['post_id']
-        return reverse('blog:post_detail', kwargs={'post_id': post_id}) + '#comments'
-
-
-class CommentDeleteView(generic.DeleteView, LoginRequiredMixin):
-    model = Comment
-    template_name = 'blog/comment.html'
-    pk_url_kwarg = 'comment_id'
-
-    def get_success_url(self):
-        # Получение поста из переданных параметров
-        post_id = self.kwargs['post_id']
-        return reverse('blog:post_detail', kwargs={'post_id': post_id}) + '#comments'
 
 
 class UserProfilelView(PostListView):
@@ -174,12 +148,12 @@ class UserProfilelView(PostListView):
 
     def get_queryset(self):
         queryset = super().get_queryset().filter(
-            author=self.request.user
+            author__username=self.kwargs['username']
         )
         return queryset
 
 
-class UserUpdateView(generic.UpdateView):
+class UserUpdateView(LoginRequiredMixin, generic.UpdateView):
     model = get_user_model()
     form_class = UserEditForm
     template_name = 'blog/user.html'
