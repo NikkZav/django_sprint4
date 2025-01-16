@@ -79,19 +79,18 @@ class PostCreateView(LoginRequiredMixin, PostMixin, generic.CreateView):
                             kwargs={'username': self.request.user.username})
 
 
-class PostUpdateView(LoginRequiredMixin,
-                     PostCreateView, generic.edit.UpdateView):
+class PostUpdateView(PostCreateView, generic.edit.UpdateView):
 
     def get_success_url(self):
         return reverse('blog:post_detail',
                        kwargs={'post_id': self.kwargs['post_id']})
 
 
-class PostDeleteView(LoginRequiredMixin, PostCreateView, generic.DeleteView):
+class PostDeleteView(PostCreateView, generic.DeleteView):
     pass
 
 
-class CommentMixin:
+class CommentMixin(LoginRequiredMixin):
     model = Comment
     form_class = CommentForm
     pk_url_kwarg = 'comment_id'
@@ -112,15 +111,15 @@ class CommentMixin:
         return reverse('blog:post_detail', kwargs={'post_id': self.kwargs['post_id']}) + '#comments'
 
 
-class CommentCreateView(LoginRequiredMixin, CommentMixin, generic.CreateView):
+class CommentCreateView(CommentMixin, generic.CreateView):
     """Создание комментария."""
 
 
-class CommentUpdateView(LoginRequiredMixin, CommentMixin, generic.UpdateView):
+class CommentUpdateView(CommentMixin, generic.UpdateView):
     """Редактирование комментария."""
 
 
-class CommentDeleteView(LoginRequiredMixin, CommentMixin, generic.DeleteView):
+class CommentDeleteView(CommentMixin, generic.DeleteView):
     """Удаление комментария."""
 
 
