@@ -5,9 +5,9 @@ app_name = 'pages'
 
 urlpatterns = [
     path('about/',
-         views.about,
+         views.AboutPage.as_view(),
          name='about'),
     path('rules/',
-         views.rules,
+         views.RulesPage.as_view(),
          name='rules')
 ]

@@ -13,12 +13,13 @@ from django.urls import include, path, reverse_lazy
 from .views import MyLoginView
 
 
+handler404 = 'pages.views.page_not_found'
+handler500 = 'pages.views.custom_500'
+
 urlpatterns = [
     path('', include('blog.urls')),
     path('pages/', include('pages.urls')),
     path('admin/', admin.site.urls),
-
-
 
     path(
         'auth/registration/',
@@ -29,24 +30,10 @@ urlpatterns = [
         ),
         name='registration',
     ),
-    # Логин.
-    path('login/', MyLoginView.as_view(), name='login'),
-    # Логаут.
-    path('logout/', views.LogoutView.as_view(), name='logout'),
 
-    # Изменение пароля.
-    path('password_change/', views.PasswordChangeView.as_view(), name='password_change'),
-    # Сообщение об успешном изменении пароля.
-    path('password_change/done/', views.PasswordChangeDoneView.as_view(), name='password_change_done'),
+    path('auth/login/', MyLoginView.as_view(), name='login'),
 
-    # Восстановление пароля.
-    path('password_reset/', views.PasswordResetView.as_view(), name='password_reset'),
-    # Сообщение об отправке ссылки для восстановления пароля.
-    path('password_reset/done/', views.PasswordResetDoneView.as_view(), name='password_reset_done'),
-    # Вход по ссылке для восстановления пароля.
-    path('reset/<uidb64>/<token>/', views.PasswordResetConfirmView.as_view(), name='password_reset_confirm'),
-    # Сообщение об успешном восстановлении пароля.
-    path('reset/done/', views.PasswordResetCompleteView.as_view(), name='password_reset_complete'),
+    path('auth/', include('django.contrib.auth.urls')),
 ]
 
 # Если проект запущен в режиме разработки...

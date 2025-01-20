@@ -5,6 +5,8 @@ from django.views import generic
 from .models import Post, Category, Comment
 from django.contrib.auth import get_user_model
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.core.exceptions import PermissionDenied
+from django.http import HttpResponseRedirect
 from .forms import UserEditForm, CommentForm, PostForm
 
 
@@ -17,12 +19,26 @@ class PostMixin:
 
 class PostListView(PostMixin, generic.ListView):
     template_name = 'blog/index.html'
-    queryset = Post.objects.filter(
-        pub_date__date__lt=timezone.now(),
-        is_published=True,
-        category__is_published=True
-    ).select_related('author', 'location', 'category'
-                     ).prefetch_related('comments')
+
+    def add_count(self, posts):
+        for post in posts:
+            post.comment_count = post.comments.count()
+        return posts
+
+    def get_queryset(self):
+        queryset = Post.objects.filter(
+            pub_date__date__lt=timezone.now(),
+            is_published=True,
+            category__is_published=True
+        ).select_related(
+            'author',
+            'location',
+            'category'
+        ).prefetch_related(
+            'comments'
+        ).order_by(self.ordering)
+        
+        return self.add_count(queryset)
 
 
 class CategoryPostsListView(generic.ListView):
@@ -60,8 +76,8 @@ class PostDetailView(PostMixin, generic.DetailView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         # Добавляем комментарии к посту
-        context['comments'] = self.object.comments.order_by('-created_at')
-        context['form'] = CommentForm
+        context['comments'] = self.object.comments.order_by('created_at')
+        context['form'] = CommentForm()
         return context
 
 
@@ -79,14 +95,35 @@ class PostCreateView(LoginRequiredMixin, PostMixin, generic.CreateView):
                             kwargs={'username': self.request.user.username})
 
 
-class PostUpdateView(PostCreateView, generic.edit.UpdateView):
+class AuthorRequiredMixin:
+    def dispatch(self, request, *args, **kwargs):
+        # Если пользователь не авторизован
+        if not request.user.is_authenticated:
+            # Перенаправляем на страницу публикации
+            return HttpResponseRedirect(reverse('blog:post_detail', kwargs={'post_id': self.kwargs['post_id']}))
+
+        # Проверяем, является ли пользователь автором поста
+        post = self.get_object()
+        if post.author != request.user:
+            # Вместо 403 ошибки перенаправляем на страницу публикации
+            return HttpResponseRedirect(reverse('blog:post_detail', kwargs={'post_id': self.kwargs['post_id']}))
+
+        # Если всё в порядке, продолжаем обработку запроса
+        return super().dispatch(request, *args, **kwargs)
+
+
+class PostUpdateView(AuthorRequiredMixin,
+                     PostCreateView,
+                     generic.edit.UpdateView):
 
     def get_success_url(self):
         return reverse('blog:post_detail',
                        kwargs={'post_id': self.kwargs['post_id']})
 
 
-class PostDeleteView(PostCreateView, generic.DeleteView):
+class PostDeleteView(AuthorRequiredMixin,
+                     PostCreateView,
+                     generic.DeleteView):
     pass
 
 
@@ -136,7 +173,6 @@ class PostView(generic.View):
 
 class UserProfilelView(PostListView):
     template_name = 'blog/profile.html'
-    paginate_by = 10
 
     def get_context_data(self, **kwargs):
         context_data = super().get_context_data(**kwargs)
@@ -146,10 +182,11 @@ class UserProfilelView(PostListView):
         return context_data
 
     def get_queryset(self):
-        queryset = super().get_queryset().filter(
+        queryset = Post.objects.filter(
             author__username=self.kwargs['username']
-        )
-        return queryset
+        ).order_by(self.ordering)
+        
+        return self.add_count(queryset)
 
 
 class UserUpdateView(LoginRequiredMixin, generic.UpdateView):
