@@ -1,16 +1,19 @@
 from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
-from django.contrib.auth import views
+
 
 # Добавьте новые строчки с импортами классов.
 from django.contrib.auth.forms import UserCreationForm
 from django.views.generic.edit import CreateView
 
 # К импортам из django.urls добавьте импорт функции reverse_lazy
-from django.urls import include, path, reverse_lazy
+from django.urls import include, path
 
 from .views import MyLoginView
+
+# Импортируем функцию, позволяющую серверу разработки отдавать файлы.
+from django.conf.urls.static import static
 
 
 handler404 = 'pages.views.page_not_found'
@@ -34,10 +37,10 @@ urlpatterns = [
     path('auth/login/', MyLoginView.as_view(), name='login'),
 
     path('auth/', include('django.contrib.auth.urls')),
-]
+] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 
 # Если проект запущен в режиме разработки...
 if settings.DEBUG:
     import debug_toolbar
     # Добавить к списку urlpatterns список адресов из приложения debug_toolbar:
-    urlpatterns += (path('__debug__/', include(debug_toolbar.urls)),) 
+    urlpatterns += (path('__debug__/', include(debug_toolbar.urls)),)

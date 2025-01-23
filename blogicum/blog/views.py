@@ -1,11 +1,10 @@
 from django.utils import timezone
-from django.shortcuts import get_object_or_404, redirect
+from django.shortcuts import get_object_or_404
 from django.urls import reverse_lazy, reverse
 from django.views import generic
 from .models import Post, Category, Comment
 from django.contrib.auth import get_user_model
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.core.exceptions import PermissionDenied
 from django.http import HttpResponseRedirect, Http404
 from .forms import UserEditForm, CommentForm, PostForm
 
@@ -37,7 +36,7 @@ class PostListView(PostMixin, generic.ListView):
         ).prefetch_related(
             'comments'
         ).order_by(self.ordering)
-        
+
         return self.add_count(queryset)
 
 
@@ -64,7 +63,8 @@ class CategoryPostsListView(PostListView):
             'location',
             'category'
         ).order_by(self.ordering)
-        return queryset
+
+        return self.add_count(queryset)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -86,7 +86,7 @@ class PostDetailView(PostMixin, generic.DetailView):
 
     def dispatch(self, request, *args, **kwargs):
         post = self.get_object()
-        # Проверяем, если пост не опубликован и пользователь не автор, возвращаем 404
+        # Если пост не опубликован и пользователь не автор, возвращаем 404
         if not post.is_published and post.author != request.user:
             raise Http404("Пост не найден.")
         return super().dispatch(request, *args, **kwargs)
@@ -111,13 +111,19 @@ class PostRequiredMixin:
         # Если пользователь не авторизован
         if not request.user.is_authenticated:
             # Перенаправляем на страницу публикации
-            return HttpResponseRedirect(reverse('blog:post_detail', kwargs={'post_id': self.kwargs['post_id']}))
+            return HttpResponseRedirect(
+                reverse('blog:post_detail',
+                        kwargs={'post_id': self.kwargs['post_id']})
+            )
 
         # Проверяем, является ли пользователь автором поста
         post = self.get_object()
         if post.author != request.user:
             # Вместо 403 ошибки перенаправляем на страницу публикации
-            return HttpResponseRedirect(reverse('blog:post_detail', kwargs={'post_id': self.kwargs['post_id']}))
+            return HttpResponseRedirect(
+                reverse('blog:post_detail',
+                        kwargs={'post_id': self.kwargs['post_id']})
+            )
 
         # Если всё в порядке, продолжаем обработку запроса
         return super().dispatch(request, *args, **kwargs)
@@ -156,7 +162,9 @@ class CommentMixin(LoginRequiredMixin):
 
     def get_success_url(self):
         """Общая логика для перенаправления после успешной операции."""
-        return reverse('blog:post_detail', kwargs={'post_id': self.kwargs['post_id']}) + '#comments'
+        return reverse('blog:post_detail',
+                       kwargs={'post_id': self.kwargs['post_id']}
+                       ) + '#comments'
 
 
 class CommentCreateView(CommentMixin, generic.CreateView):
@@ -169,7 +177,10 @@ class CommentRequiredMixin:
         сomment = self.get_object()
         if сomment.author != request.user:
             # Вместо 403 ошибки перенаправляем на страницу публикации
-            return HttpResponseRedirect(reverse('blog:post_detail', kwargs={'post_id': self.kwargs['post_id']}))
+            return HttpResponseRedirect(
+                reverse('blog:post_detail',
+                        kwargs={'post_id': self.kwargs['post_id']})
+            )
 
         # Если всё в порядке, продолжаем обработку запроса
         return super().dispatch(request, *args, **kwargs)
@@ -212,7 +223,7 @@ class UserProfilelView(PostListView):
         queryset = Post.objects.filter(
             author__username=self.kwargs['username']
         ).order_by(self.ordering)
-        
+
         return self.add_count(queryset)
 
 
