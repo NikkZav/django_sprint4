@@ -6,7 +6,7 @@ from .models import Post, Category, Comment
 from django.contrib.auth import get_user_model
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied
-from django.http import HttpResponseRedirect
+from django.http import HttpResponseRedirect, Http404
 from .forms import UserEditForm, CommentForm, PostForm
 
 
@@ -41,7 +41,7 @@ class PostListView(PostMixin, generic.ListView):
         return self.add_count(queryset)
 
 
-class CategoryPostsListView(generic.ListView):
+class CategoryPostsListView(PostListView):
     template_name = 'blog/category.html'
 
     def get_queryset(self):
@@ -59,7 +59,11 @@ class CategoryPostsListView(generic.ListView):
             category=self.category,
             pub_date__date__lt=timezone.now(),
             is_published=True,
-        ).select_related('author', 'location', 'category')
+        ).select_related(
+            'author',
+            'location',
+            'category'
+        ).order_by(self.ordering)
         return queryset
 
     def get_context_data(self, **kwargs):
@@ -80,6 +84,13 @@ class PostDetailView(PostMixin, generic.DetailView):
         context['form'] = CommentForm()
         return context
 
+    def dispatch(self, request, *args, **kwargs):
+        post = self.get_object()
+        # Проверяем, если пост не опубликован и пользователь не автор, возвращаем 404
+        if not post.is_published and post.author != request.user:
+            raise Http404("Пост не найден.")
+        return super().dispatch(request, *args, **kwargs)
+
 
 class PostCreateView(LoginRequiredMixin, PostMixin, generic.CreateView):
     form_class = PostForm
@@ -95,7 +106,7 @@ class PostCreateView(LoginRequiredMixin, PostMixin, generic.CreateView):
                             kwargs={'username': self.request.user.username})
 
 
-class AuthorRequiredMixin:
+class PostRequiredMixin:
     def dispatch(self, request, *args, **kwargs):
         # Если пользователь не авторизован
         if not request.user.is_authenticated:
@@ -112,7 +123,7 @@ class AuthorRequiredMixin:
         return super().dispatch(request, *args, **kwargs)
 
 
-class PostUpdateView(AuthorRequiredMixin,
+class PostUpdateView(PostRequiredMixin,
                      PostCreateView,
                      generic.edit.UpdateView):
 
@@ -121,7 +132,7 @@ class PostUpdateView(AuthorRequiredMixin,
                        kwargs={'post_id': self.kwargs['post_id']})
 
 
-class PostDeleteView(AuthorRequiredMixin,
+class PostDeleteView(PostRequiredMixin,
                      PostCreateView,
                      generic.DeleteView):
     pass
@@ -152,11 +163,27 @@ class CommentCreateView(CommentMixin, generic.CreateView):
     """Создание комментария."""
 
 
-class CommentUpdateView(CommentMixin, generic.UpdateView):
+class CommentRequiredMixin:
+    def dispatch(self, request, *args, **kwargs):
+        # Проверяем, является ли пользователь автором комментария
+        сomment = self.get_object()
+        if сomment.author != request.user:
+            # Вместо 403 ошибки перенаправляем на страницу публикации
+            return HttpResponseRedirect(reverse('blog:post_detail', kwargs={'post_id': self.kwargs['post_id']}))
+
+        # Если всё в порядке, продолжаем обработку запроса
+        return super().dispatch(request, *args, **kwargs)
+
+
+class CommentUpdateView(CommentRequiredMixin,
+                        CommentMixin,
+                        generic.UpdateView):
     """Редактирование комментария."""
 
 
-class CommentDeleteView(CommentMixin, generic.DeleteView):
+class CommentDeleteView(CommentRequiredMixin,
+                        CommentMixin,
+                        generic.DeleteView):
     """Удаление комментария."""
 
 
