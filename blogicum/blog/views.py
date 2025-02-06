@@ -87,7 +87,8 @@ class PostDetailView(PostMixin, generic.DetailView):
     def dispatch(self, request, *args, **kwargs):
         post = self.get_object()
         # Если пост не опубликован и пользователь не автор, возвращаем 404
-        if not post.is_published and post.author != request.user:
+        if not post.is_published and (not request.user.is_authenticated
+                                      or request.user != post.author):
             raise Http404("Пост не найден.")
         return super().dispatch(request, *args, **kwargs)
 
