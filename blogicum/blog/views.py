@@ -3,10 +3,29 @@ from django.shortcuts import get_object_or_404
 from django.urls import reverse_lazy, reverse
 from django.views import generic
 from .models import Post, Category, Comment
+from django.db.models import Count, Manager, QuerySet
 from django.contrib.auth import get_user_model
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import HttpResponseRedirect, Http404
 from .forms import UserEditForm, CommentForm, PostForm
+
+
+def get_filtered_posts(manager: Manager,
+                       only_published: bool = True,
+                       ban_delayed: bool = True,
+                       **conditions) -> QuerySet:
+    if ban_delayed:
+        conditions['pub_date__date__lt'] = timezone.now()
+    if only_published:
+        conditions['is_published'] = True
+
+    return manager.filter(
+        **conditions,
+    ).select_related(
+        'author', 'location', 'category'
+    ).annotate(
+        comment_count=Count('comments')
+    ).order_by('-pub_date')
 
 
 class PostMixin:
@@ -18,26 +37,7 @@ class PostMixin:
 
 class PostListView(PostMixin, generic.ListView):
     template_name = 'blog/index.html'
-
-    def add_count(self, posts):
-        for post in posts:
-            post.comment_count = post.comments.count()
-        return posts
-
-    def get_queryset(self):
-        queryset = Post.objects.filter(
-            pub_date__date__lt=timezone.now(),
-            is_published=True,
-            category__is_published=True
-        ).select_related(
-            'author',
-            'location',
-            'category'
-        ).prefetch_related(
-            'comments'
-        ).order_by(self.ordering)
-
-        return self.add_count(queryset)
+    queryset = get_filtered_posts(Post.objects, category__is_published=True)
 
 
 class CategoryPostsListView(PostListView):
@@ -53,18 +53,7 @@ class CategoryPostsListView(PostListView):
             Category, slug=category_slug, is_published=True
         )
 
-        # Фильтруем посты по категории и другим условиям
-        queryset = self.category.posts.filter(
-            category=self.category,
-            pub_date__date__lt=timezone.now(),
-            is_published=True,
-        ).select_related(
-            'author',
-            'location',
-            'category'
-        ).order_by(self.ordering)
-
-        return self.add_count(queryset)
+        return get_filtered_posts(self.category.posts)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -221,11 +210,12 @@ class UserProfilelView(PostListView):
         return context_data
 
     def get_queryset(self):
-        queryset = Post.objects.filter(
-            author__username=self.kwargs['username']
-        ).order_by(self.ordering)
-
-        return self.add_count(queryset)
+        return get_filtered_posts(
+            Post.objects,
+            author__username=self.kwargs['username'],
+            only_published=False,
+            ban_delayed=False
+        )
 
 
 class UserUpdateView(LoginRequiredMixin, generic.UpdateView):
