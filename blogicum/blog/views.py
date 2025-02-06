@@ -202,20 +202,34 @@ class PostView(generic.View):
 class UserProfilelView(PostListView):
     template_name = 'blog/profile.html'
 
+    def dispatch(self, request, *args, **kwargs):
+        # Определяем, является ли текущий пользователь владельцем профиля
+        self.profile_user = get_object_or_404(
+            get_user_model(),
+            username=self.kwargs['username']
+        )
+        self.is_owner = request.user.is_authenticated \
+            and (request.user == self.profile_user)
+        return super().dispatch(request, *args, **kwargs)
+
     def get_context_data(self, **kwargs):
         context_data = super().get_context_data(**kwargs)
-        context_data['profile'] = get_object_or_404(
-            get_user_model(), username=self.kwargs['username']
-        )
+        context_data['profile'] = self.profile_user
         return context_data
 
     def get_queryset(self):
-        return get_filtered_posts(
-            Post.objects,
-            author__username=self.kwargs['username'],
-            only_published=False,
-            ban_delayed=False
-        )
+        if self.is_owner:  # Если владелец профиля, показываем все записи
+            return get_filtered_posts(
+                Post.objects,
+                author__username=self.kwargs['username'],
+                only_published=False,  # включаем неопубликованные
+                ban_delayed=False      # включаем отложенные
+            )
+        else:  # Если не владелец, показываем только допустимые записи
+            return get_filtered_posts(
+                Post.objects,
+                author__username=self.kwargs['username']
+            )
 
 
 class UserUpdateView(LoginRequiredMixin, generic.UpdateView):
